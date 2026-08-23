@@ -134,6 +134,23 @@ bindings into a named `[env.x]`, so a second environment means repeating every
 D1, KV, R2, queue, Durable Object and cron block or watching them silently
 disappear. `tests/config.test.ts` fails the build if that is ever reintroduced.
 
+Because Wrangler creates the DNS records and certificates itself, the API token
+used by CI needs more than the default Workers scope:
+
+| Permission | Why |
+|---|---|
+| Account / Workers Scripts / Edit | Deploy the Worker |
+| Account / Workers KV Storage / Edit | Bind the namespaces |
+| Account / Workers R2 Storage / Edit | Bind the bucket |
+| Account / D1 / Edit | Run migrations |
+| Zone / Workers Routes / Edit | Attach `ops.` and `go.` |
+| Zone / DNS / Edit | Create the two records |
+
+Scope the zone permissions to `bbanetwork.org`, and store the token as the
+`CLOUDFLARE_API_TOKEN` repository secret alongside `CLOUDFLARE_ACCOUNT_ID`. A
+token missing the last two rows deploys the Worker fine and then fails on the
+route, which reads like a broken deploy but is only a permissions gap.
+
 See [docs/connecting-accounts.md](docs/connecting-accounts.md) for what each
 platform needs, including which ones require app review before they will let
 you post.
