@@ -61,16 +61,16 @@ LOG_LEVEL = "info"
 [[d1_databases]]
 binding = "DB"
 database_name = "bba-growth-os"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "8150c1a7-323f-46d6-a683-49cba96d8c80"
 migrations_dir = "db/migrations"
 
 [[kv_namespaces]]
 binding = "CONFIG"
-id = "REPLACE_WITH_CONFIG_KV_ID"
+id = "dbfd1330ba83422dbe82a3fc1d8ede7e"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_WITH_CACHE_KV_ID"
+id = "d8523f9806ed42129883c2184d89376a"
 
 [[r2_buckets]]
 binding = "MEDIA"
