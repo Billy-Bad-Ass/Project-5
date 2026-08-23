@@ -6,9 +6,6 @@
 # stays disconnected, and the guardian reports it on the next health check.
 set -uo pipefail
 
-ENV_FLAG=""
-if [ "${1:-}" = "--production" ]; then ENV_FLAG="--env production"; fi
-
 REQUIRED=(
   ADMIN_TOKEN
 )
@@ -75,15 +72,16 @@ put_secret() {
     fi
     return
   fi
-  printf '%s' "$value" | npx wrangler secret put "$name" $ENV_FLAG >/dev/null 2>&1 \
+  printf '%s' "$value" | npx wrangler secret put "$name" >/dev/null 2>&1 \
     && echo "  stored" || echo "  FAILED"
 }
 
-echo "Uploading secrets to Cloudflare${ENV_FLAG:+ (production)}."
+echo "Uploading secrets to Cloudflare."
 echo "Values are never written to disk."
 
 for name in "${REQUIRED[@]}"; do put_secret "$name" yes; done
 for name in "${OPTIONAL[@]}"; do put_secret "$name" no; done
 
 echo
-echo "Done. Check what is connected with: curl -H \"authorization: Bearer \$ADMIN_TOKEN\" https://<worker>/api/status"
+echo "Done. Check what is connected with:"
+echo '  curl -H "authorization: Bearer $ADMIN_TOKEN" https://ops.bbanetwork.org/api/status'

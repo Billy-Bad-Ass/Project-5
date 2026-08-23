@@ -106,9 +106,33 @@ bash scripts/push-secrets.sh   # reads each value from your terminal, never a fi
 npm run deploy
 ```
 
-Then open the Worker URL, paste your `ADMIN_TOKEN`, and connect accounts on the
-Accounts tab. Put each credential in a Worker secret first; the console only
-stores the *name* of the secret, never the token.
+Then open <https://ops.bbanetwork.org>, paste your `ADMIN_TOKEN`, and connect
+accounts on the Accounts tab. Put each credential in a Worker secret first; the
+console only stores the *name* of the secret, never the token.
+
+### Domains
+
+Two custom domains on `bbanetwork.org`, both created automatically on deploy:
+
+| Host | Serves |
+|---|---|
+| `ops.bbanetwork.org` | Console, admin API, media, Stripe webhook |
+| `go.bbanetwork.org` | Tracked ad links (`/go/<offer-slug>`) |
+
+The apex is left alone for the marketing site. Media has to be served from a
+real origin because platforms fetch creative themselves rather than accepting
+bytes, which is what `PUBLIC_BASE_URL` is for.
+
+Ads point at `go.` rather than at the landing page directly, so the click
+carries the channel, campaign and creative through to the Stripe checkout
+session. That is the whole basis of attribution, and without it the optimizer
+allocates on clicks instead of money. See
+[docs/connecting-accounts.md](docs/connecting-accounts.md#stripe-attribution).
+
+There is one environment, not a dev/prod split. Wrangler does not inherit
+bindings into a named `[env.x]`, so a second environment means repeating every
+D1, KV, R2, queue, Durable Object and cron block or watching them silently
+disappear. `tests/config.test.ts` fails the build if that is ever reintroduced.
 
 See [docs/connecting-accounts.md](docs/connecting-accounts.md) for what each
 platform needs, including which ones require app review before they will let
@@ -144,7 +168,7 @@ src/
   integrations/  Stripe, Anthropic, Databento
   agents/        the ten agents
   orchestrator/  context, guardrails, allocator, schedule, dispatch, DO
-  api/           routes, auth, approval flow
+  api/           routes, auth, approval flow, tracked ad links
   ui/            the operator console, one self-contained page
 db/migrations/   D1 schema
 docs/            architecture, account setup, operations runbook
@@ -159,6 +183,7 @@ docs/            architecture, account setup, operations runbook
 - Databento: pay per query. Optional. Skip the key and the quant agent
   no-ops.
 - Ad spend: whatever you set `DAILY_SPEND_CAP_CENTS` to, and not a cent more.
+- Custom domains and the DNS in front of them are included with the zone.
 
 ## Development
 

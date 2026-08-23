@@ -3,6 +3,7 @@ import { id } from '../lib/ids';
 import { nowIso } from '../lib/time';
 import { adsFor } from '../platforms';
 import { approvalGate, checkSpendAction, hasApproval } from '../orchestrator/guardrails';
+import { offerLink } from '../api/links';
 import type { Account, Campaign, CampaignChannel, Channel, Creative, Offer } from '../types';
 import { type Agent, failed, num, ok, str } from './agent';
 
@@ -109,7 +110,14 @@ export const mediabuyer: Agent = {
               startsAt: campaign.starts_at,
               endsAt: campaign.ends_at,
               targeting: parseJson(channelRow.targeting, {}),
-              landingUrl: offer.landing_url,
+              // Tracked link, so the click carries the channel and campaign
+              // through to the Stripe checkout session.
+              landingUrl: offerLink(ctx.env, offer, {
+                channel: account.channel,
+                campaignId: campaign.id,
+                campaignName: campaign.name,
+                medium: 'paid',
+              }),
             },
           );
 
@@ -217,7 +225,13 @@ export const mediabuyer: Agent = {
               body: creativeRow.body,
               cta: creativeRow.cta,
               media: [],
-              landingUrl: offer.landing_url,
+              landingUrl: offerLink(ctx.env, offer, {
+                channel: account.channel,
+                campaignId: channelRow.campaign_id,
+                campaignName: campaign.name,
+                medium: 'paid',
+                variant: creativeRow.id,
+              }),
               sourcePostId: creativeRow.external_id,
             },
           );

@@ -21,6 +21,8 @@ export interface Env {
   LOG_LEVEL: string;
   /** Absolute origin of this Worker. Platforms fetch media from here. */
   PUBLIC_BASE_URL: string;
+  /** Origin serving tracked ad links (GET /go/<offer-slug>). */
+  LINK_BASE_URL: string;
 
   // --- secrets (wrangler secret put) ---
   /** Bearer token for the console and the admin API. */

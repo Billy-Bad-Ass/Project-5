@@ -2,14 +2,44 @@ name = "bba-growth-os"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
+
+# Single environment on purpose.
+#
+# Wrangler does not inherit bindings into a named [env.x]: d1_databases,
+# kv_namespaces, r2_buckets, queues, durable_objects and triggers all have to be
+# repeated per environment or they silently vanish. Duplicating them drifts, and
+# a production Worker with no queue and no crons looks healthy while doing
+# nothing at all. One environment cannot have that problem.
+#
+# Local development runs against simulated resources via `npm run dev`, which
+# overrides BBA_ENV, so nothing here needs a second copy.
 workers_dev = true
+
+# ---------------------------------------------------------------------------
+# Custom domains on bbanetwork.org.
+#
+# ops. serves the console, the admin API, media and the Stripe webhook.
+# go.  serves tracked click-through links, so ad destinations are on our own
+#      domain rather than a workers.dev subdomain.
+#
+# Both point at this one Worker. `custom_domain = true` makes Wrangler create
+# the DNS record and the certificate on deploy, so there is nothing to click in
+# the dashboard. The apex bbanetwork.org is left alone for the marketing site.
+# ---------------------------------------------------------------------------
+[[routes]]
+pattern = "ops.bbanetwork.org"
+custom_domain = true
+
+[[routes]]
+pattern = "go.bbanetwork.org"
+custom_domain = true
 
 # ---------------------------------------------------------------------------
 # Non-secret configuration. Secrets go through `wrangler secret put` (see
 # scripts/push-secrets.sh) and never into this file.
 # ---------------------------------------------------------------------------
 [vars]
-BBA_ENV = "development"
+BBA_ENV = "production"
 BBA_BUSINESS_NAME = "BBA Network"
 BBA_BUSINESS_EMAIL = "bbacentralworkspace@gmail.com"
 # Master kill switch. While true no agent may mutate a live ad account or
@@ -21,9 +51,11 @@ REQUIRE_HUMAN_APPROVAL = "true"
 DAILY_SPEND_CAP_CENTS = "20000"
 # A creative must score at least this on the editorial gate (0-100) to ship.
 EDITORIAL_MIN_SCORE = "78"
-# Platforms pull creative over the public internet, so this must be the real
-# reachable origin of the deployed Worker (or a custom domain in front of it).
-PUBLIC_BASE_URL = "https://bba-growth-os.workers.dev"
+# Platforms pull creative over the public internet, so this has to be an origin
+# they can actually reach.
+PUBLIC_BASE_URL = "https://ops.bbanetwork.org"
+# Base for tracked ad links built by GET /go/<offer-slug>.
+LINK_BASE_URL = "https://go.bbanetwork.org"
 LOG_LEVEL = "info"
 
 [[d1_databases]]
@@ -78,17 +110,3 @@ crons = [
 
 [observability]
 enabled = true
-
-[env.production]
-name = "bba-growth-os-prod"
-
-[env.production.vars]
-BBA_ENV = "production"
-BBA_BUSINESS_NAME = "BBA Network"
-BBA_BUSINESS_EMAIL = "bbacentralworkspace@gmail.com"
-DRY_RUN = "true"
-REQUIRE_HUMAN_APPROVAL = "true"
-DAILY_SPEND_CAP_CENTS = "20000"
-EDITORIAL_MIN_SCORE = "78"
-PUBLIC_BASE_URL = "https://bba-growth-os-prod.workers.dev"
-LOG_LEVEL = "info"

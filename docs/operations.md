@@ -39,7 +39,7 @@ tokens last until revoked.
 
 ```bash
 npx wrangler secret put <SECRET_NAME>       # paste the new token
-curl -X POST https://<worker>/api/agents/guardian/health_check \
+curl -X POST https://ops.bbanetwork.org/api/agents/guardian/health_check \
   -H "authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -51,7 +51,7 @@ The circuit breaker trips at the cap and every spend action is refused from
 that point in the UTC day. To stop everything immediately:
 
 ```bash
-curl -X POST https://<worker>/api/config \
+curl -X POST https://ops.bbanetwork.org/api/config \
   -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" \
   -d '{"paused":true}'
 ```
@@ -73,7 +73,7 @@ it passed the gate.
 To retry a failed post, set it back to `scheduled`:
 
 ```bash
-curl -X PATCH https://<worker>/api/creatives/<creative id> \
+curl -X PATCH https://ops.bbanetwork.org/api/creatives/<creative id> \
   -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" \
   -d '{"status":"approved"}'
 ```
@@ -100,7 +100,7 @@ holds any channel inside its 3-day learning phase. With no conversion data it
 splits evenly and says so in the reason field. Check with a dry preview:
 
 ```bash
-curl -X POST https://<worker>/api/agents/optimizer/preview \
+curl -X POST https://ops.bbanetwork.org/api/agents/optimizer/preview \
   -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" -d '{}'
 ```
 
@@ -115,7 +115,7 @@ the optimizer is allocating on clicks, not money. See
 
 ```bash
 export A="authorization: Bearer $ADMIN_TOKEN"
-W=https://<worker>
+W=https://ops.bbanetwork.org
 
 curl -H "$A" $W/api/status                       # everything at a glance
 curl -H "$A" $W/api/approvals                    # the queue

@@ -12,7 +12,7 @@ npx wrangler secret put TIKTOK_ACCESS_TOKEN     # paste the value when prompted
 then, on the console's Accounts tab (or via the API):
 
 ```bash
-curl -X POST https://<worker>/api/accounts \
+curl -X POST https://ops.bbanetwork.org/api/accounts \
   -H "authorization: Bearer $ADMIN_TOKEN" \
   -H "content-type: application/json" \
   -d '{"channel":"tiktok","surface":"organic","externalId":"<open_id>","secretRef":"TIKTOK_ACCESS_TOKEN","handle":"@bbanetwork"}'
@@ -166,10 +166,35 @@ uploaded creative id, passed through as `sourcePostId`.
 
 ## Stripe attribution
 
-Attribution is only as good as what the landing page writes onto the checkout
-session. Set metadata when you create it:
+Attribution is what turns "we got clicks" into "this channel made money", and
+it is the input the optimizer allocates on. It works in two hops.
+
+**Hop one: the ad link.** Ads and posts do not point at the landing page
+directly. The mediabuyer points them at `go.bbanetwork.org`, which redirects to
+the landing page with the channel, campaign and creative appended:
+
+```
+https://go.bbanetwork.org/go/starter?ch=tiktok&c=cmp_abc&m=paid&v=crv_9
+            |
+            v  302
+https://bbanetwork.org/starter?utm_source=tiktok&utm_medium=paid
+    &utm_campaign=spring+push&utm_content=crv_9
+    &bba_channel=tiktok&bba_campaign_id=cmp_abc
+```
+
+The destination always comes from the `offers` table, never from the request,
+so the redirect cannot be pointed anywhere else. Nothing is written on that
+path; click counts come from the platforms during the metrics sync, which is
+more accurate than anything measured here and cannot be inflated by a crawler.
+
+You can hand-build a link for a channel the system does not manage:
+`https://go.bbanetwork.org/go/<offer-slug>?ch=newsletter&m=email`.
+
+**Hop two: the checkout session.** The landing page copies those parameters
+onto the Stripe checkout session metadata:
 
 ```js
+const params = new URLSearchParams(location.search);
 const session = await stripe.checkout.sessions.create({
   // ...
   metadata: {
@@ -180,9 +205,19 @@ const session = await stripe.checkout.sessions.create({
 });
 ```
 
-Without it, revenue is recorded as `unattributed` rather than guessed at, and
-the analyst raises an incident once more than 60% of revenue has no channel.
+Persist those values (session storage, or a hidden field) if the visitor
+browses before buying, otherwise a second page view loses them.
 
-Point the Stripe webhook at `https://<worker>/webhooks/stripe` and subscribe to
-`checkout.session.completed`, `charge.refunded`, `invoice.paid` and
+Without hop two, revenue is recorded as `unattributed` rather than guessed at,
+and the analyst raises an incident once more than 60% of revenue has no
+channel. The optimizer then falls back to allocating on clicks, which is much
+worse: clicks are cheap on the channels that convert worst.
+
+## Stripe webhook
+
+Point the webhook at `https://ops.bbanetwork.org/webhooks/stripe` and subscribe
+to `checkout.session.completed`, `charge.refunded`, `invoice.paid` and
 `charge.dispute.created`.
+
+Signatures are verified with HMAC-SHA256 in constant time, and anything more
+than five minutes old is rejected so a captured request cannot be replayed.

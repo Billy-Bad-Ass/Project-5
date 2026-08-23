@@ -14,6 +14,7 @@ import { createCampaignRecord } from '../agents/mediabuyer';
 import { storeMedia } from '../agents/producer';
 import { blendedCac, blendedRoas } from '../orchestrator/allocator';
 import { recordRevenueEvent, verifyWebhook } from '../integrations/stripe';
+import { handleGoLink } from './links';
 import { decideApproval } from './approvals';
 import { json, requireAdmin } from './auth';
 import { renderConsole } from '../ui/console';
@@ -28,6 +29,10 @@ export async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/health') return handleHealth(env);
   if (path.startsWith('/media/')) return serveMedia(env, path.slice('/media/'.length));
   if (path === '/webhooks/stripe' && method === 'POST') return stripeWebhook(request, env);
+  // Ad destinations. Unauthenticated by necessity, this is where the ads point.
+  if (path.startsWith('/go/') && (method === 'GET' || method === 'HEAD')) {
+    return handleGoLink(env, url, path.slice('/go/'.length));
+  }
 
   // --- console --------------------------------------------------------
   if (path === '/' && method === 'GET') {
