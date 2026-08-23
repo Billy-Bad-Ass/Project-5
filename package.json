@@ -1,0 +1,29 @@
+{
+  "name": "bba-growth-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BBA Network Growth OS: agent-orchestrated paid ads and organic publishing on Cloudflare Workers.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wrangler dev --var BBA_ENV:development",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate:local": "wrangler d1 migrations apply bba-growth-os --local",
+    "db:migrate": "wrangler d1 migrations apply bba-growth-os --remote",
+    "seed:local": "wrangler d1 execute bba-growth-os --local --file=db/seed.sql",
+    "secrets:push": "bash scripts/push-secrets.sh",
+    "check": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "@types/node": "^22.20.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.101.0"
+  }
+}

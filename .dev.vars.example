@@ -1,0 +1,31 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit .dev.vars.
+# In production these live in Worker secrets, not in a file.
+
+ADMIN_TOKEN=change-me-to-something-long
+
+ANTHROPIC_API_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+DATABENTO_API_KEY=
+
+# Meta covers Facebook Pages, Instagram, Threads and Meta Ads.
+META_SYSTEM_USER_TOKEN=
+META_AD_ACCOUNT_ID=
+THREADS_ACCESS_TOKEN=
+
+TIKTOK_ACCESS_TOKEN=
+TIKTOK_ADVERTISER_ID=
+
+# X credentials are JSON because OAuth 1.0a needs four values:
+# {"consumer_key":"","consumer_secret":"","access_token":"","token_secret":""}
+X_ACCESS_TOKEN=
+
+# Google-family credentials are JSON with refresh material:
+# {"access_token":"","refresh_token":"","client_id":"","client_secret":"","developer_token":"","login_customer_id":""}
+YOUTUBE_REFRESH_TOKEN=
+GOOGLE_ADS_REFRESH_TOKEN=
+
+PINTEREST_ACCESS_TOKEN=
+LINKEDIN_ACCESS_TOKEN=
+REDDIT_REFRESH_TOKEN=
+SNAPCHAT_REFRESH_TOKEN=
