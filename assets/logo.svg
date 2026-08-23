@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="BBA Network">
+  <title>BBA Network</title>
+  <rect width="240" height="240" rx="28" fill="#0b0d10"/>
+  <g fill="none" stroke="#d4af37" stroke-width="7" stroke-linecap="round">
+    <circle cx="120" cy="120" r="86" opacity="0.5"/>
+    <path d="M56 168 L120 60 L184 168"/>
+    <path d="M84 168 L156 168"/>
+  </g>
+  <text x="120" y="212" text-anchor="middle" font-family="Georgia, serif" font-size="26"
+        letter-spacing="6" fill="#d4af37">BBA</text>
+</svg>

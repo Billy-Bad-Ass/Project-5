@@ -1,0 +1,94 @@
+name = "bba-growth-os"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# ---------------------------------------------------------------------------
+# Non-secret configuration. Secrets go through `wrangler secret put` (see
+# scripts/push-secrets.sh) and never into this file.
+# ---------------------------------------------------------------------------
+[vars]
+BBA_ENV = "development"
+BBA_BUSINESS_NAME = "BBA Network"
+BBA_BUSINESS_EMAIL = "bbacentralworkspace@gmail.com"
+# Master kill switch. While true no agent may mutate a live ad account or
+# publish a post; every mutation is written to the decision log instead.
+DRY_RUN = "true"
+# Nothing reaches a live account without a human approving it first.
+REQUIRE_HUMAN_APPROVAL = "true"
+# Hard ceiling in minor units (cents) across every ad channel per UTC day.
+DAILY_SPEND_CAP_CENTS = "20000"
+# A creative must score at least this on the editorial gate (0-100) to ship.
+EDITORIAL_MIN_SCORE = "78"
+# Platforms pull creative over the public internet, so this must be the real
+# reachable origin of the deployed Worker (or a custom domain in front of it).
+PUBLIC_BASE_URL = "https://bba-growth-os.workers.dev"
+LOG_LEVEL = "info"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bba-growth-os"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "db/migrations"
+
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "REPLACE_WITH_CONFIG_KV_ID"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_WITH_CACHE_KV_ID"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "bba-growth-os-media"
+
+[[queues.producers]]
+binding = "JOBS"
+queue = "bba-growth-os-jobs"
+
+[[queues.consumers]]
+queue = "bba-growth-os-jobs"
+max_batch_size = 10
+max_batch_timeout = 10
+max_retries = 3
+dead_letter_queue = "bba-growth-os-jobs-dlq"
+
+[[durable_objects.bindings]]
+name = "CAMPAIGN_ROOM"
+class_name = "CampaignRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CampaignRoom"]
+
+# ---------------------------------------------------------------------------
+# Automatic orchestration. Every agent cycle in the system starts from one of
+# these. See src/orchestrator/schedule.ts for what each cron maps to.
+# ---------------------------------------------------------------------------
+[triggers]
+crons = [
+  "*/5 * * * *",   # tick:      drain due work, publish scheduled posts, health
+  "15 * * * *",    # hourly:    pull metrics from every connected channel
+  "30 */6 * * *",  # optimize:  reallocate budget, pause losers
+  "0 13 * * *",    # daily:     analyst report, replan, refill creative pipeline
+  "0 14 * * 1"     # weekly:    portfolio review and strategy reset
+]
+
+[observability]
+enabled = true
+
+[env.production]
+name = "bba-growth-os-prod"
+
+[env.production.vars]
+BBA_ENV = "production"
+BBA_BUSINESS_NAME = "BBA Network"
+BBA_BUSINESS_EMAIL = "bbacentralworkspace@gmail.com"
+DRY_RUN = "true"
+REQUIRE_HUMAN_APPROVAL = "true"
+DAILY_SPEND_CAP_CENTS = "20000"
+EDITORIAL_MIN_SCORE = "78"
+PUBLIC_BASE_URL = "https://bba-growth-os-prod.workers.dev"
+LOG_LEVEL = "info"
