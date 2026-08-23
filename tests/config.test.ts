@@ -48,6 +48,14 @@ describe('wrangler configuration', () => {
     expect(toml).not.toMatch(/^\[env\./m);
   });
 
+  it('carries no unreplaced resource ids', () => {
+    // A placeholder here deploys a Worker bound to a database that does not
+    // exist, which fails at the first query rather than at deploy time.
+    expect(toml, 'setup.sh placeholder still in wrangler.toml').not.toMatch(/REPLACE_WITH_/);
+    expect(toml).toMatch(/database_id\s*=\s*"[0-9a-f-]{36}"/);
+    expect(toml.match(/^id\s*=\s*"[0-9a-f]{32}"$/gm)?.length, 'expected two KV namespace ids').toBe(2);
+  });
+
   it('points PUBLIC_BASE_URL at a real reachable origin', () => {
     const value = toml.match(/PUBLIC_BASE_URL\s*=\s*"([^"]+)"/)?.[1];
     expect(value).toBeTruthy();

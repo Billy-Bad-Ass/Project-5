@@ -143,6 +143,7 @@ used by CI needs more than the default Workers scope:
 | Account / Workers KV Storage / Edit | Bind the namespaces |
 | Account / Workers R2 Storage / Edit | Bind the bucket |
 | Account / D1 / Edit | Run migrations |
+| Account / Queues / Edit | Create and bind the job queue |
 | Zone / Workers Routes / Edit | Attach `ops.` and `go.` |
 | Zone / DNS / Edit | Create the two records |
 
