@@ -74,6 +74,31 @@ describe('wrangler configuration', () => {
     expect(toml).toMatch(/REQUIRE_HUMAN_APPROVAL\s*=\s*"true"/);
   });
 
+  it('caps daily spend at $25, and the cap only ever moves down', () => {
+    // 2500 cents. The cap was cut from 20000 on 2026-08-24 and is a hard
+    // ceiling, not a tuning knob: raising it is a human decision made in a
+    // commit, where it shows up in review — never in a runtime override.
+    const cap = Number(toml.match(/DAILY_SPEND_CAP_CENTS\s*=\s*"(\d+)"/)?.[1]);
+    expect(cap).toBe(2500);
+  });
+
+  it('keeps the in-code fallback cap at or below the configured one', () => {
+    // loadConfig falls back to a literal when the env var is missing. A
+    // fallback above the configured cap would mean a half-configured deploy
+    // spends MORE than a fully configured one.
+    const source = readFileSync('src/lib/config.ts', 'utf8');
+    const fallback = Number(source.match(/env\.DAILY_SPEND_CAP_CENTS,\s*([\d_]+),/)?.[1]?.replace(/_/g, ''));
+    expect(fallback).toBeLessThanOrEqual(2500);
+  });
+
+  it('verifies cron registration after every deploy', () => {
+    // scripts/check-crons.mjs compares wrangler.toml against the schedules
+    // Cloudflare actually holds. If this step goes missing, a deploy that
+    // silently dropped its triggers goes back to looking like success.
+    const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
+    expect(workflow).toContain('scripts/check-crons.mjs');
+  });
+
   it('deploys the same environment the config describes', () => {
     const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
     expect(workflow).not.toContain('--env production');

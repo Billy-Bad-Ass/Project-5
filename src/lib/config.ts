@@ -28,7 +28,7 @@ export async function loadConfig(env: Env): Promise<RuntimeConfig> {
     dailySpendCapCents: pickNum(
       overrides.dailySpendCapCents,
       env.DAILY_SPEND_CAP_CENTS,
-      20_000,
+      2_500,
     ),
     editorialMinScore: pickNum(overrides.editorialMinScore, env.EDITORIAL_MIN_SCORE, 78),
     enabledChannels: Array.isArray(overrides.enabledChannels)

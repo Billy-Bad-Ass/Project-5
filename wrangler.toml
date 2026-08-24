@@ -48,7 +48,7 @@ DRY_RUN = "true"
 # Nothing reaches a live account without a human approving it first.
 REQUIRE_HUMAN_APPROVAL = "true"
 # Hard ceiling in minor units (cents) across every ad channel per UTC day.
-DAILY_SPEND_CAP_CENTS = "20000"
+DAILY_SPEND_CAP_CENTS = "2500"
 # A creative must score at least this on the editorial gate (0-100) to ship.
 EDITORIAL_MIN_SCORE = "78"
 # Platforms pull creative over the public internet, so this has to be an origin
