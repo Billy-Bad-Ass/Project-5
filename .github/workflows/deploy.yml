@@ -51,3 +51,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # A deployed Worker is not a running one. Every agent cycle starts from a
+      # cron trigger, so verify the schedules Cloudflare actually registered
+      # match the ones wrangler.toml declares — a deploy that lost them would
+      # otherwise look green while the system does nothing, forever.
+      - name: Verify cron triggers are registered
+        run: node scripts/check-crons.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

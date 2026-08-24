@@ -162,7 +162,7 @@ you post.
 |---|---|---|
 | `DRY_RUN` | on | Every mutation is logged, nothing is sent |
 | `REQUIRE_HUMAN_APPROVAL` | on | Campaigns, budget rises and copy all need a person |
-| `DAILY_SPEND_CAP_CENTS` | 20000 ($200) | Hard ceiling across every channel |
+| `DAILY_SPEND_CAP_CENTS` | 2500 ($25) | Hard ceiling across every channel |
 | Spend circuit breaker | always | Trips when actual spend reaches the cap |
 | Spend anomaly detection | always | Trips at 2.5x the trailing median pace |
 | Everything created upstream | paused | Activation is a separate approved step |
