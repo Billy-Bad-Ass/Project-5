@@ -204,7 +204,7 @@ export const scout: Agent = {
 async function readableText(url: string): Promise<string> {
   const res = await apiFetch<{ raw?: string } | string>(url, {
     channel: 'scout',
-    headers: { 'user-agent': 'BBA-Growth-OS/0.1 (+https://github.com/Billy-Bad-Ass/Project-5)' },
+    headers: { 'user-agent': 'BBA-Growth-OS/0.1 (+https://github.com/Billy-Bad-Ass/growth-os-5)' },
     attempts: 2,
     timeoutMs: 15_000,
   });
