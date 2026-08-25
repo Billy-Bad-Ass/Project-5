@@ -18,6 +18,33 @@ import { readFileSync } from 'node:fs';
 
 const SCRIPT_NAME = 'bba-growth-os';
 
+/**
+ * The crons wrangler.toml declares. Comments are stripped first so prose
+ * about a cron is never mistaken for one, then the crons array is matched
+ * through to its closing bracket — the first version of this stopped at the
+ * first "[" it saw, which is the opening bracket of `crons = [` itself, and
+ * so read a fully-populated schedule as empty. That failure shape is why
+ * --print-declared exists: the parser is exercised by the test suite against
+ * the real file, offline.
+ */
+export function declaredCrons(tomlText) {
+  const stripped = tomlText
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, ''))
+    .join('\n');
+  const arr = stripped.match(/\[triggers\][\s\S]*?crons\s*=\s*\[([\s\S]*?)\]/)?.[1] ?? '';
+  return [...arr.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+}
+
+const declared = declaredCrons(readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8'));
+
+// Offline mode for the test suite: print what the parser sees and stop,
+// before any credential is required.
+if (process.argv.includes('--print-declared')) {
+  console.log(JSON.stringify(declared));
+  process.exit(0);
+}
+
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const account = process.env.CLOUDFLARE_ACCOUNT_ID;
 if (!token || !account) {
@@ -25,14 +52,6 @@ if (!token || !account) {
   process.exit(1);
 }
 
-// The declared crons, from the same file the deploy read. Comments stripped so
-// prose about a cron is never mistaken for one, matching tests/config.test.ts.
-const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8')
-  .split('\n')
-  .map((line) => line.replace(/#.*$/, ''))
-  .join('\n');
-const triggersBlock = toml.match(/\[triggers\][^[]*/)?.[0] ?? '';
-const declared = [...triggersBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
 if (declared.length === 0) {
   console.error('wrangler.toml declares no cron triggers — nothing would ever run.');
   process.exit(1);
