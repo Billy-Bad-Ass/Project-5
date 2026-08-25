@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -89,6 +90,20 @@ describe('wrangler configuration', () => {
     const source = readFileSync('src/lib/config.ts', 'utf8');
     const fallback = Number(source.match(/env\.DAILY_SPEND_CAP_CENTS,\s*([\d_]+),/)?.[1]?.replace(/_/g, ''));
     expect(fallback).toBeLessThanOrEqual(2500);
+  });
+
+  it('parses the declared crons out of wrangler.toml correctly', () => {
+    // The first version of check-crons.mjs stopped parsing at the opening
+    // bracket of `crons = [` and read five schedules as zero, failing the
+    // deploy verify step against a Worker whose crons were all registered.
+    // This runs the real script's parser against the real file, offline.
+    const out = execFileSync('node', ['scripts/check-crons.mjs', '--print-declared'], {
+      encoding: 'utf8',
+    });
+    const declared = JSON.parse(out) as string[];
+    expect(declared).toHaveLength(5);
+    expect(declared).toContain('*/5 * * * *');
+    expect(declared).toContain('0 14 * * 1');
   });
 
   it('verifies cron registration after every deploy', () => {
