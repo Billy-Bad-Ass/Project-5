@@ -90,9 +90,17 @@ export function allocate(
   });
 
   const totalScore = scored.reduce((sum, s) => sum + s.score, 0);
-  const equalShare = constraints.totalDailyBudgetCents / performances.length;
+  const total = constraints.totalDailyBudgetCents;
+  const equalShare = total / performances.length;
 
-  return scored.map(({ p, score }) => {
+  // The floor cannot be honoured for every channel if there are more channels
+  // than the budget has floors to give. Lowering it here keeps the plan inside
+  // the total; the alternative is a plan that asks for more than the cap and
+  // is then refused a channel at a time by budgetGate.
+  const floor = Math.min(constraints.minPerChannelCents, Math.floor(total / performances.length));
+  const floored = floor < constraints.minPerChannelCents;
+
+  const shaped = scored.map(({ p, score }) => {
     let target: number;
     let reason: string;
 
@@ -103,13 +111,13 @@ export function allocate(
       target = equalShare;
       reason = 'no signal yet, split evenly';
     } else {
-      target = (score / totalScore) * constraints.totalDailyBudgetCents;
+      target = (score / totalScore) * total;
       reason = `sampled score ${score.toFixed(2)} of ${totalScore.toFixed(2)}`;
     }
 
     // Share ceiling, then per-cycle move limit, then floor. Order matters:
     // the floor must win so an active channel is never starved to zero.
-    target = Math.min(target, constraints.totalDailyBudgetCents * constraints.maxShare);
+    target = Math.min(target, total * constraints.maxShare);
 
     const current = p.currentDailyBudgetCents;
     if (current > 0) {
@@ -119,19 +127,47 @@ export function allocate(
         reason += `, move capped at ${Math.round(constraints.maxChangeRatio * 100)}%`;
       }
     }
-    target = Math.max(target, constraints.minPerChannelCents);
+    target = Math.max(target, floor);
+    if (floored) reason += `, floor lowered to ${floor} to fit the budget`;
 
-    const proposed = Math.round(target);
-    return {
-      campaignChannelId: p.campaignChannelId,
-      channel: p.channel,
-      currentCents: current,
-      proposedCents: proposed,
-      deltaCents: proposed - current,
-      score,
-      reason,
-    };
+    return { p, score, target, reason };
   });
+
+  // Both of the clamps above can only push a channel up: the floor lifts the
+  // losers and the move limit stops the winners falling to pay for them. So a
+  // plan is never short of the total, and without this it is routinely over —
+  // five channels at the shipped defaults asked for 2833 cents of a 2500 cap.
+  // Trim the excess from whatever sits above the floor, in proportion to how
+  // much room each channel has, which leaves the sampler's ordering intact.
+  const wanted = shaped.reduce((sum, s) => sum + s.target, 0);
+  const headroom = shaped.reduce((sum, s) => sum + Math.max(0, s.target - floor), 0);
+  const excess = wanted - total;
+  if (excess > 0 && headroom > 0) {
+    for (const s of shaped) {
+      const room = Math.max(0, s.target - floor);
+      s.target -= Math.min(room, excess * (room / headroom));
+      s.reason += ', trimmed to fit the budget';
+    }
+  }
+
+  // Rounding can put a plan a few cents over the line it was just brought
+  // under. Take those cents off the largest allocation, never add them.
+  const allocations = shaped.map((s) => ({ ...s, proposed: Math.round(s.target) }));
+  const drift = allocations.reduce((sum, a) => sum + a.proposed, 0) - total;
+  if (drift > 0) {
+    const largest = allocations.reduce((a, b) => (b.proposed > a.proposed ? b : a));
+    largest.proposed -= drift;
+  }
+
+  return allocations.map(({ p, score, proposed, reason }) => ({
+    campaignChannelId: p.campaignChannelId,
+    channel: p.channel,
+    currentCents: p.currentDailyBudgetCents,
+    proposedCents: proposed,
+    deltaCents: proposed - p.currentDailyBudgetCents,
+    score,
+    reason,
+  }));
 }
 
 /**

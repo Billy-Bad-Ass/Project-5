@@ -187,3 +187,80 @@ describe('mulberry32', () => {
     }
   });
 });
+
+describe('a plan never asks for more than the budget it was given', () => {
+  const CAP = 2_500; // DAILY_SPEND_CAP_CENTS, the shipped default
+
+  function fleet(n: number, budget: number): ChannelPerformance[] {
+    return Array.from({ length: n }, (_, i) =>
+      channel({
+        channel: `ch${i}`,
+        campaignChannelId: `cch_${i}`,
+        currentDailyBudgetCents: budget,
+        spendCents: 2_000 + i * 400,
+        conversions: 1 + (i % 4),
+        revenueCents: 3_000 + i * 900,
+        clicks: 80 + i * 20,
+      }),
+    );
+  }
+
+  // Five is the number of ad platforms this repo ships adapters for, so this
+  // is the ordinary case rather than an extreme one. Before the fit step it
+  // asked for 2833 of 2500.
+  it.each([1, 2, 3, 5, 6, 9, 12])('holds for %i channels', (n) => {
+    const plan = allocate(fleet(n, Math.floor(CAP / n)), {
+      ...DEFAULT_CONSTRAINTS,
+      totalDailyBudgetCents: CAP,
+      seed: 20_260_826,
+    });
+    const sum = plan.reduce((total, a) => total + a.proposedCents, 0);
+    expect(sum).toBeLessThanOrEqual(CAP);
+  });
+
+  it('holds across many seeds, where the sampler favours different channels', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const plan = allocate(fleet(6, 400), {
+        ...DEFAULT_CONSTRAINTS,
+        totalDailyBudgetCents: CAP,
+        seed,
+      });
+      const sum = plan.reduce((total, a) => total + a.proposedCents, 0);
+      expect(sum, `seed ${seed} asked for ${sum}`).toBeLessThanOrEqual(CAP);
+    }
+  });
+
+  it('lowers the floor rather than breaching the budget when both cannot hold', () => {
+    // Nine channels cannot all sit at the 500 floor inside a 2500 cap.
+    const plan = allocate(fleet(9, 200), {
+      ...DEFAULT_CONSTRAINTS,
+      totalDailyBudgetCents: CAP,
+      seed: 7,
+    });
+    const sum = plan.reduce((total, a) => total + a.proposedCents, 0);
+    expect(sum).toBeLessThanOrEqual(CAP);
+    expect(plan.every((a) => a.proposedCents > 0)).toBe(true);
+    expect(plan.some((a) => a.reason.includes('floor lowered'))).toBe(true);
+  });
+
+  it('still keeps every active channel funded when the floor does fit', () => {
+    const plan = allocate(fleet(4, 600), {
+      ...DEFAULT_CONSTRAINTS,
+      totalDailyBudgetCents: CAP,
+      seed: 3,
+    });
+    expect(plan.every((a) => a.proposedCents >= DEFAULT_CONSTRAINTS.minPerChannelCents)).toBe(true);
+  });
+
+  it('does not inflate a plan that already sits under the budget', () => {
+    // Four channels on 100 each: the 35% move limit caps every rise at 135.
+    const plan = allocate(fleet(4, 100), {
+      ...DEFAULT_CONSTRAINTS,
+      minPerChannelCents: 0,
+      totalDailyBudgetCents: CAP,
+      seed: 5,
+    });
+    const sum = plan.reduce((total, a) => total + a.proposedCents, 0);
+    expect(sum).toBeLessThanOrEqual(4 * 135);
+  });
+});
