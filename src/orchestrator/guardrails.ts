@@ -1,6 +1,6 @@
 import type { Env } from '../env';
 import type { RuntimeConfig } from '../lib/config';
-import { all, first } from '../lib/db';
+import { all, first, parseJson } from '../lib/db';
 import { utcDate, daysAgoUtc } from '../lib/time';
 import type { Channel } from '../types';
 import type { AgentContext } from './context';
@@ -196,11 +196,81 @@ export async function checkSpendAction(
 }
 
 /**
- * Has a human already approved this exact subject, and is that approval still
- * valid? Checked against the database rather than trusted from a job payload,
- * so a replayed or forged queue message cannot claim approval it never got.
+ * One approval authorises one change.
+ *
+ * A job that follows an approval carries that approval's id. Only the id: the
+ * row behind it — whether it is still approved, what it was for, and the
+ * number the person actually saw — is read from the database here, so a
+ * replayed or forged queue message cannot claim an approval it never got, and
+ * cannot spend a real one on a different change.
  */
-export async function hasApproval(
+export interface ApprovalRecord {
+  status: string;
+  subject_type: string;
+  subject_id: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  /** The decision's proposed JSON, so the amount can be checked against it. */
+  proposed: string | null;
+}
+
+/** What this approval has to authorise for the caller to proceed. */
+export interface ApprovalRequirement {
+  subjectType: string;
+  subjectId: string;
+  /** Field in the decision's proposed JSON that must equal `value`. */
+  field?: string;
+  value?: number;
+}
+
+export async function approvalById(
+  env: Env,
+  approvalId: string,
+): Promise<ApprovalRecord | null> {
+  return first<ApprovalRecord>(
+    env,
+    `SELECT a.status, a.subject_type, a.subject_id, a.decided_by, a.decided_at,
+            d.proposed
+       FROM approvals a
+       LEFT JOIN decisions d ON d.id = a.decision_id
+      WHERE a.id = ?`,
+    approvalId,
+  );
+}
+
+/**
+ * Does this approval authorise this exact change? Pure, so the rule that
+ * guards every live spend is testable without a database.
+ */
+export function approvalMatches(
+  row: ApprovalRecord | null,
+  want: ApprovalRequirement,
+): boolean {
+  if (!row) return false;
+  if (row.status !== 'approved') return false;
+  if (row.subject_type !== want.subjectType) return false;
+  if (row.subject_id !== want.subjectId) return false;
+  if (want.field === undefined) return true;
+
+  // An amount was named, so it has to be the amount the person saw. Without
+  // this an approval of 1500 cents would clear a job asking for 200000.
+  const proposed = parseJson<Record<string, unknown> | null>(row.proposed, null);
+  if (!proposed) return false;
+  const actual = proposed[want.field];
+  return typeof actual === 'number' && actual === want.value;
+}
+
+/**
+ * Is there a standing approval for this subject?
+ *
+ * This is the weaker check, and it is only correct where the subject is
+ * approved once and acted on once — a campaign plan a person signs off before
+ * it is launched. Do not reach for it to gate a repeating action: any past
+ * approval on the subject satisfies it forever, which is how a single approved
+ * budget rise once cleared every later rise on the same channel. Anything that
+ * can happen more than once wants `approvedFor` and an approval id.
+ */
+export async function hasStandingApproval(
   env: Env,
   subjectType: string,
   subjectId: string,
@@ -218,5 +288,25 @@ export async function hasApproval(
     approved: true,
     ...(row.decided_by ? { by: row.decided_by } : {}),
     ...(row.decided_at ? { at: row.decided_at } : {}),
+  };
+}
+
+/**
+ * Fetch and check in one step. Returns not-approved for a missing id rather
+ * than throwing, because "no approval was quoted" and "the approval quoted
+ * does not cover this" are the same answer to the caller: ask a human.
+ */
+export async function approvedFor(
+  env: Env,
+  approvalId: string | undefined | null,
+  want: ApprovalRequirement,
+): Promise<{ approved: boolean; by?: string; at?: string }> {
+  if (!approvalId) return { approved: false };
+  const row = await approvalById(env, approvalId);
+  if (!approvalMatches(row, want)) return { approved: false };
+  return {
+    approved: true,
+    ...(row!.decided_by ? { by: row!.decided_by } : {}),
+    ...(row!.decided_at ? { at: row!.decided_at } : {}),
   };
 }

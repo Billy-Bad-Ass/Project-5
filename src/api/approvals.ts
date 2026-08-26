@@ -127,6 +127,9 @@ async function applyApproval(env: Env, approval: ApprovalRow): Promise<string[]>
             campaignChannelId: channelRow.id,
             status: 'active',
             level: 'adset',
+            // The id, not the permission. mediabuyer re-reads this row and
+            // checks it still authorises this channel before spending.
+            approvalId: approval.id,
             rationale: `approved by human via ${approval.id}`,
           },
           priority: 2,
@@ -171,6 +174,9 @@ async function applyApproval(env: Env, approval: ApprovalRow): Promise<string[]>
           payload: {
             campaignChannelId: approval.subject_id,
             dailyBudgetCents,
+            // As above: mediabuyer re-reads this approval and confirms the
+            // amount matches the one the person saw before it applies it.
+            approvalId: approval.id,
             rationale: `approved by human via ${approval.id}`,
           },
           priority: 3,

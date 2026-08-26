@@ -2,7 +2,12 @@ import { all, first, insert, parseJson, update } from '../lib/db';
 import { id } from '../lib/ids';
 import { nowIso } from '../lib/time';
 import { adsFor } from '../platforms';
-import { approvalGate, checkSpendAction, hasApproval } from '../orchestrator/guardrails';
+import {
+  approvalGate,
+  approvedFor,
+  checkSpendAction,
+  hasStandingApproval,
+} from '../orchestrator/guardrails';
 import { offerLink } from '../api/links';
 import type { Account, Campaign, CampaignChannel, Channel, Creative, Offer } from '../types';
 import { type Agent, failed, num, ok, str } from './agent';
@@ -74,9 +79,11 @@ export const mediabuyer: Agent = {
         }
 
         // Creating a campaign upstream is itself gated: a person approves the
-        // plan once, and that approval covers every channel on it.
+        // plan once, and that approval covers every channel on it. A standing
+        // approval is the right check here and only here — the campaign is
+        // approved once and launched once.
         if (ctx.config.requireHumanApproval) {
-          const signed = await hasApproval(ctx.env, 'campaign', campaignId);
+          const signed = await hasStandingApproval(ctx.env, 'campaign', campaignId);
           if (!signed.approved) {
             blocked.push(`${channelRow.channel}: campaign has not been approved yet`);
             continue;
@@ -305,7 +312,16 @@ export const mediabuyer: Agent = {
       });
 
       const approval = approvalGate(ctx.config, { action: 'set_budget', risk });
-      const already = await hasApproval(ctx.env, 'budget_change', campaignChannelId);
+      // An approval buys one change: this channel, this number. A person who
+      // approved 1500 cents last month has not approved whatever is being
+      // asked for now, so the approval the job quotes is checked against the
+      // amount in front of us.
+      const already = await approvedFor(ctx.env, str(payload, 'approvalId'), {
+        subjectType: 'budget_change',
+        subjectId: campaignChannelId,
+        field: 'daily_budget_cents',
+        value: dailyBudgetCents,
+      });
       if (!approval.allowed && approval.needsApproval && !already.approved) {
         await ctx.requestApproval({
           decisionId,
@@ -373,7 +389,13 @@ export const mediabuyer: Agent = {
         if (!gate.allowed) return ok(`blocked: ${gate.reason}`);
 
         const approval = approvalGate(ctx.config, { action: 'activate', risk: 'high' });
-        const already = await hasApproval(ctx.env, 'campaign', campaignChannelId);
+        // Same rule for going live: the approval that unpaused this channel
+        // once does not authorise unpausing it again after the optimizer has
+        // shut it down for losing money.
+        const already = await approvedFor(ctx.env, str(payload, 'approvalId'), {
+          subjectType: 'campaign',
+          subjectId: campaignChannelId,
+        });
         if (!approval.allowed && !already.approved) {
           const decisionId = await ctx.decide({
             agent: 'mediabuyer',

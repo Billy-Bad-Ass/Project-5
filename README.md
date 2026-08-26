@@ -169,9 +169,13 @@ you post.
 | Editorial gate | 78/100 | Copy below the bar cannot be scheduled |
 | Budget changes per campaign per day | 8 | Enforced by a Durable Object |
 
-Approval is checked against the database at the moment of action, not passed in
-a job payload, so a replayed queue message cannot claim an approval it never
-got.
+A job that follows an approval carries that approval's id and nothing else.
+The permission itself is read from the database at the moment of action —
+whether the approval is still approved, what it was for, and the number the
+person actually saw — so a replayed or forged queue message cannot claim an
+approval it never got, and cannot spend a real one on a different change. An
+approval authorises one change; the next rise on the same channel needs its
+own.
 
 Going live means flipping two switches on the Overview tab: turn off dry run,
 then turn off approval-required only once you have watched it for a while.
