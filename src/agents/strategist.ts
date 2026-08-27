@@ -245,7 +245,23 @@ export const strategist: Agent = {
         if ((row?.n ?? 0) < targetPerChannel) hungry.push(account.channel);
       }
 
-      if (hungry.length === 0) return ok('every channel has copy in the pipeline');
+      // "Every channel is fed" and "there are no channels" are different
+      // states, and reporting them with the same sentence is how an idle
+      // system passes for a healthy one. On this deployment `accounts` was
+      // empty for three days: every daily run returned the reassuring message
+      // below over an empty loop, while offers, campaigns and creatives all sat
+      // at zero and nothing said so.
+      if (accounts.length === 0) {
+        return ok('no connected organic accounts, so nothing to plan copy for', {
+          data: { accounts: 0, hungry: [] },
+        });
+      }
+
+      if (hungry.length === 0) {
+        return ok(`every channel has copy in the pipeline (${accounts.length} connected)`, {
+          data: { accounts: accounts.length, hungry: [] },
+        });
+      }
 
       const jobId = await ctx.enqueue({
         agent: 'creative',
