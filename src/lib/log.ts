@@ -1,3 +1,4 @@
+import { AppError } from './errors';
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 const ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -54,7 +55,15 @@ export class Logger {
 /** Errors are not JSON-serialisable by default. */
 export function errorFields(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
-    return { error: err.message, error_name: err.name, stack: err.stack?.slice(0, 2000) };
+    return {
+      error: err.message,
+      error_name: err.name,
+      // The upstream body and status, when there is one. Without these a 400
+      // from a vendor logs as a bare status and the reason it names — the one
+      // fact that makes it fixable — is thrown away. See describeError.
+      ...(err instanceof AppError ? { error_status: err.status, error_context: err.context } : {}),
+      stack: err.stack?.slice(0, 2000),
+    };
   }
   return { error: String(err) };
 }

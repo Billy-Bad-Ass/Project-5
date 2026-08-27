@@ -77,7 +77,6 @@ export const scout: Agent = {
       }>(ctx.env, {
         model: MODELS.worker,
         maxTokens: 1500,
-        temperature: 0.2,
         system: [
           'You extract what a landing page factually claims. You do not summarise, improve, or embellish.',
           'A claim goes in the list only if the page states it. Never infer, never generalise, never add a number the page does not contain.',

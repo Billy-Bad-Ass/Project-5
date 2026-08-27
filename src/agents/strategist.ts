@@ -105,7 +105,6 @@ export const strategist: Agent = {
         plan = await completeJson<Plan>(ctx.env, {
           model: MODELS.writer,
           maxTokens: 2500,
-          temperature: 0.8,
           system: [
             'You plan paid acquisition for BBA Network.',
             'You are given real trailing performance. Base the split on it. Where there is no history, say so and propose a small test rather than a confident allocation.',

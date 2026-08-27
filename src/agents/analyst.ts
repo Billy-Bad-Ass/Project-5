@@ -208,7 +208,6 @@ export const analyst: Agent = {
           narrative = await complete(ctx.env, {
             model: MODELS.worker,
             maxTokens: 700,
-            temperature: 0.4,
             system: [
               'You write the daily performance note for the operator of BBA Network.',
               'You are given computed figures. Use only those figures. Never invent a number, a cause, or a source.',

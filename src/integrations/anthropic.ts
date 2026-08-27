@@ -25,10 +25,32 @@ export interface CompleteOptions {
   prompt: string;
   model?: string;
   maxTokens?: number;
-  temperature?: number;
   /** JSON schema the reply must satisfy, enforced via a forced tool call. */
   schema?: Record<string, unknown>;
 }
+
+/**
+ * There is deliberately no `temperature` here, and adding one back will break
+ * every agent that writes.
+ *
+ * Both models above are Claude 5. That generation removed the sampling
+ * parameters — `temperature`, `top_p`, `top_k` — and rejects a request
+ * carrying any of them with a 400 rather than ignoring it. This client sent
+ * `temperature` on *every* call, defaulted to 1, so from the moment the key
+ * was set on 2026-08-27 not one model call could succeed: `job_scoutproof02`
+ * failed three times with
+ *
+ *     POST https://api.anthropic.com/v1/messages failed with 400
+ *
+ * and the whole writing side of the system — scout's claim list, and
+ * therefore creative and strategist, which may not exceed it — sat behind it.
+ *
+ * The five call sites expressed real intent through it (0.2 to extract
+ * faithfully, 1 to vary), and that intent now has nowhere to go: on Claude 5
+ * the equivalent lever is `output_config.effort`, not sampling. It is left
+ * unset until there is a reason to tune it, because a default effort that
+ * nobody measured is not an improvement over the model's own.
+ */
 
 interface AnthropicResponse {
   content?: ({ type: 'text'; text: string } | { type: 'tool_use'; input: unknown })[];
@@ -68,11 +90,10 @@ export async function completeJson<T>(env: Env, opts: CompleteOptions): Promise<
   return call.input as T;
 }
 
-function baseBody(opts: CompleteOptions): Record<string, unknown> {
+export function baseBody(opts: CompleteOptions): Record<string, unknown> {
   return {
     model: opts.model ?? MODELS.writer,
     max_tokens: opts.maxTokens ?? 2048,
-    temperature: opts.temperature ?? 1,
     system: opts.system,
     messages: [{ role: 'user', content: opts.prompt }],
   };
