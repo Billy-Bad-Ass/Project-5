@@ -128,7 +128,6 @@ export const creative: Agent = {
             prompt: `Write ${count} variants.\n\n${JSON.stringify(brief, null, 2)}`,
             schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
             maxTokens: 3000,
-            temperature: 1,
           });
           drafts = res.variants ?? [];
         } catch (err) {
@@ -227,7 +226,6 @@ async function refine(
         ].join('\n'),
         schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
         maxTokens: 2000,
-        temperature: 0.7,
       });
       const next = revised.variants?.[0];
       if (!next) break;

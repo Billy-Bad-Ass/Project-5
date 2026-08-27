@@ -45,3 +45,27 @@ export class GuardrailError extends AppError {
     this.name = 'GuardrailError';
   }
 }
+
+/**
+ * An error rendered with the part that actually says what went wrong.
+ *
+ * `String(err)` on a PlatformError gives "PlatformError: POST <url> failed
+ * with 400" and stops there — the upstream body, which apiFetch went to the
+ * trouble of capturing, is dropped. On 2026-08-27 that was the entire record
+ * of why every model call was failing: a status, and no reason. Finding the
+ * cause meant reading the client and the vendor's changelog instead of
+ * reading the error.
+ *
+ * So anything that persists or logs an error uses this instead.
+ */
+export function describeError(err: unknown, limit = 1000): string {
+  if (!(err instanceof AppError)) {
+    return String(err).slice(0, limit);
+  }
+  const parts = [`${err.name}: ${err.message}`];
+  const body = err.context.body;
+  if (typeof body === 'string' && body.trim()) {
+    parts.push(`upstream: ${body.trim()}`);
+  }
+  return parts.join(' — ').slice(0, limit);
+}

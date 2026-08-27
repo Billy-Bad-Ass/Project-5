@@ -2,6 +2,7 @@ import type { Env } from '../env';
 import { loadConfig } from '../lib/config';
 import { all, first, insert, parseJson, update } from '../lib/db';
 import { id } from '../lib/ids';
+import { describeError } from '../lib/errors';
 import { errorFields, Logger } from '../lib/log';
 import { isoPlusMinutes, nowIso } from '../lib/time';
 import type { AgentId, JobMessage, JobRecord } from '../types';
@@ -210,7 +211,7 @@ export async function handleQueue(
       const exhausted = job.attempts + 1 >= job.max_attempts;
       await update(env, 'jobs', jobId, {
         status: exhausted ? 'failed' : 'queued',
-        error: String(err).slice(0, 1000),
+        error: describeError(err, 1000),
         ...(exhausted ? { finished_at: nowIso() } : {}),
       });
       jobLog.error('job threw', errorFields(err));
@@ -222,7 +223,7 @@ export async function handleQueue(
           source: `agent:${agent}`,
           code: 'job_failed',
           message: `${agent}.${task} failed after ${job.max_attempts} attempts`,
-          context: JSON.stringify({ job_id: jobId, error: String(err).slice(0, 500) }),
+          context: JSON.stringify({ job_id: jobId, error: describeError(err, 500) }),
           created_at: nowIso(),
         });
         message.ack();
