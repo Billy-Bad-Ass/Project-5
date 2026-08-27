@@ -115,7 +115,17 @@ export const producer: Agent = {
         ...visual,
         limit,
       );
-      if (rows.length === 0) return ok('every visual creative has media');
+      // Says which of the two zero states this is, for the same reason as
+      // strategist.plan_organic: an empty catalogue and a fully-served one both
+      // return no rows here, and only one of them is good news.
+      if (rows.length === 0) {
+        const total = await first<{ n: number }>(
+          ctx.env,
+          `SELECT COUNT(*) AS n FROM creatives WHERE status IN ('approved','pending_approval')`,
+        );
+        if ((total?.n ?? 0) === 0) return ok('no approved or pending creatives exist yet');
+        return ok('every visual creative has media');
+      }
 
       let enqueued = 0;
       for (const row of rows) {
