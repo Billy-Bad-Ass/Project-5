@@ -119,3 +119,59 @@ describe('wrangler configuration', () => {
     expect(workflow).not.toContain('--env production');
   });
 });
+
+/**
+ * Which plan a task sits in is a reliability decision, not a tidiness one.
+ *
+ * Every cron declared in wrangler.toml is registered with Cloudflare — the
+ * suite above proves that — and four of the five have fired on time since
+ * 2026-08-23. The weekly one has never fired at all, including on the Monday
+ * it was first due.
+ *
+ * scout.research_offer is what records the claims a writer may not exceed, so
+ * nothing in creative.ts can produce a line of copy until it has run. Holding
+ * that behind the one trigger with no successful run on record is the bet these
+ * tests exist to prevent someone quietly re-placing.
+ */
+describe('the plan that unblocks copy', () => {
+  const now = '2026-08-27T13:00:00.000Z';
+
+  it('researches the offer on the daily pass, not only the weekly one', async () => {
+    const { planFor } = await import('../src/orchestrator/schedule');
+    const daily = planFor('0 13 * * *', now);
+    expect(daily).toBeDefined();
+    expect(
+      daily!.tasks.some((t) => t.agent === 'scout' && t.task === 'research_offer'),
+    ).toBe(true);
+  });
+
+  it('still researches it weekly, so the wider refresh keeps its pair', async () => {
+    const { planFor } = await import('../src/orchestrator/schedule');
+    const weekly = planFor('0 14 * * 1', now);
+    expect(weekly).toBeDefined();
+    expect(
+      weekly!.tasks.some((t) => t.agent === 'scout' && t.task === 'research_offer'),
+    ).toBe(true);
+  });
+
+  it('deduplicates the daily research so a re-run costs one model call a day', async () => {
+    const { planFor } = await import('../src/orchestrator/schedule');
+    const daily = planFor('0 13 * * *', now);
+    const scout = daily!.tasks.find((t) => t.agent === 'scout');
+    expect(scout?.dedupe).toBeDefined();
+    expect(scout!.dedupe!.length).toBeGreaterThan(0);
+  });
+
+  it('gives every cron in wrangler.toml a plan to run', async () => {
+    // An expression registered with Cloudflare but absent from CRON_PLANS logs
+    // "no plan for cron" and returns — a trigger that fires into nothing, which
+    // reads in the console as an agent that simply never ran.
+    const { CRON_PLANS } = await import('../src/orchestrator/schedule');
+    const out = execFileSync('node', ['scripts/check-crons.mjs', '--print-declared'], {
+      encoding: 'utf8',
+    });
+    for (const cron of JSON.parse(out) as string[]) {
+      expect(Object.keys(CRON_PLANS)).toContain(cron);
+    }
+  });
+});
