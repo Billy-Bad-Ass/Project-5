@@ -52,6 +52,34 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Runtime secrets, from GitHub rather than a terminal.
+      #
+      # scripts/push-secrets.sh is the documented way to set these, and it reads
+      # each value from a TTY. That is the right design for a laptop and the
+      # wrong one here: this project is operated from a browser and an iPad,
+      # where there is no terminal to read from — so in practice they never got
+      # set. ANTHROPIC_API_KEY was still unset on the live Worker three days
+      # after launch, which is what stopped scout.research_offer,
+      # creative.draft_batch and the daily report's narrative from running.
+      #
+      # Only names actually present in GitHub are pushed, so leaving one out
+      # keeps whatever the Worker already has rather than blanking it. A name
+      # you change here overwrites the Worker on the next run, which makes this
+      # the rotation path too.
+      #
+      # printf, not echo: wrangler reads stdin verbatim and a trailing newline
+      # would become part of the value.
+      - name: Sync runtime secrets from GitHub
+        run: bash scripts/sync-secrets-ci.sh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SECRET_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SECRET_ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          SECRET_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          SECRET_STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          SECRET_DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+
       # A deployed Worker is not a running one. Every agent cycle starts from a
       # cron trigger, so verify the schedules Cloudflare actually registered
       # match the ones wrangler.toml declares — a deploy that lost them would

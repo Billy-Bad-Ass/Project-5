@@ -110,6 +110,30 @@ Then open <https://ops.bbanetwork.org>, paste your `ADMIN_TOKEN`, and connect
 accounts on the Accounts tab. Put each credential in a Worker secret first; the
 console only stores the *name* of the secret, never the token.
 
+### Setting secrets without a terminal
+
+`push-secrets.sh` reads from a TTY, so it cannot be used from a browser or a
+tablet. The deploy workflow covers the same ground:
+
+1. **GitHub → Settings → Secrets and variables → Actions.** Add the value as a
+   repository secret under its own name — `ANTHROPIC_API_KEY`, `ADMIN_TOKEN`,
+   `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `DATABENTO_API_KEY`.
+2. **Actions → deploy → Run workflow.**
+
+The **Sync runtime secrets from GitHub** step pushes them onto the Worker and
+prints which names it set — never a value. A name you leave out keeps whatever
+the Worker already has, so this cannot blank a secret set another way; a name
+you change overwrites it, which makes this the rotation path too.
+
+`ANTHROPIC_API_KEY` is the one to set first. Without it `scout.research_offer`
+and `creative.draft_batch` fail outright and the daily report's narrative comes
+back empty — no copy gets written at all.
+
+Platform tokens (Meta, TikTok, Google Ads, Pinterest, Snapchat, …) are not on
+that list. They still go on with `wrangler secret put`, because connecting an
+account needs the console anyway — see
+[`docs/connecting-accounts.md`](docs/connecting-accounts.md).
+
 ### Domains
 
 Two custom domains on `bbanetwork.org`, both created automatically on deploy:
