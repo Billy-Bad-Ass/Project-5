@@ -65,6 +65,22 @@ export const CRON_PLANS: Record<string, (nowIso: string) => CronPlan> = {
       { agent: 'analyst', task: 'sync_metrics', payload: { days: 7 }, priority: 2, dedupe: [day(now)] },
       { agent: 'analyst', task: 'attribute_revenue', payload: { days: 7 }, priority: 2, dedupe: [day(now)] },
       { agent: 'quant', task: 'refresh_signals', priority: 5, dedupe: [day(now)] },
+      // Reads the active offer's landing page and records what it factually
+      // claims. The whole writing side depends on it: creative.ts may not
+      // exceed the claim list scout builds, so until this runs there is nothing
+      // for a writer to be true to.
+      //
+      // It lived in the weekly plan alone, and the weekly cron has never fired
+      // — not once since 2026-08-23, including the Monday it was due, while the
+      // other four ran on time. Leaving the one task that unblocks copy behind
+      // the least reliable trigger in the system is a bad bet even if that cron
+      // starts working tomorrow.
+      //
+      // Daily is affordable: one page fetch and one worker-model call. It is
+      // also self-limiting — claims are merged, deduped and capped at 40, so
+      // re-reading an unchanged page adds nothing. It still runs weekly too,
+      // beside refresh_exemplars, which reads the wider source list.
+      { agent: 'scout', task: 'research_offer', priority: 4, dedupe: [day(now)] },
       { agent: 'strategist', task: 'plan_organic', payload: { targetPerChannel: 3 }, priority: 5, dedupe: [day(now)] },
       { agent: 'producer', task: 'find_missing_media', priority: 6, dedupe: [day(now)] },
       { agent: 'publisher', task: 'schedule_batch', payload: { perChannel: 2 }, priority: 5, dedupe: [day(now)] },
