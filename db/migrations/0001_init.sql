@@ -150,7 +150,9 @@ CREATE TABLE posts (
   published_at      TEXT,
   external_id       TEXT,
   permalink         TEXT,
-  status            TEXT NOT NULL DEFAULT 'scheduled', -- scheduled | pending_approval | publishing | published | failed | cancelled
+  -- needs_reconcile: the platform never answered, so the post may or may not
+  -- be live. Never republished automatically; a person confirms which it is.
+  status            TEXT NOT NULL DEFAULT 'scheduled', -- scheduled | pending_approval | publishing | published | failed | cancelled | needs_reconcile
   attempts          INTEGER NOT NULL DEFAULT 0,
   last_error        TEXT,
   idempotency_key   TEXT NOT NULL UNIQUE,

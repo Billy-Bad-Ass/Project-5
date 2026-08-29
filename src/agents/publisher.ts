@@ -1,4 +1,5 @@
 import { all, first, insert, parseJson, update } from '../lib/db';
+import { PlatformError, describeError } from '../lib/errors';
 import { id, idempotencyKey } from '../lib/ids';
 import { isoPlusMinutes, nowIso } from '../lib/time';
 import { organicFor } from '../platforms';
@@ -122,7 +123,12 @@ export const publisher: Agent = {
       return ok(`${enqueued} posts sent to the queue`, { enqueued });
     },
 
-    /** Publish one post. Idempotent: a post that already went out is skipped. */
+    /**
+     * Publish one post.
+     *
+     * A post that already went out is skipped. A post whose last attempt ended
+     * without an answer is *held*, not retried: see the catch below.
+     */
     async publish_post(ctx, payload) {
       const postId = str(payload, 'postId');
       if (!postId) return failed('publish_post needs a postId');
@@ -131,6 +137,12 @@ export const publisher: Agent = {
       if (!post) return failed(`post ${postId} not found`);
       if (post.status === 'published') return ok('already published');
       if (post.status === 'cancelled') return ok('cancelled, skipping');
+      // Held because a previous attempt may already have posted it. Publishing
+      // now is exactly the duplicate this status exists to prevent; a person
+      // checks the account and either cancels it or marks it published.
+      if (post.status === 'needs_reconcile') {
+        return ok('held: a previous attempt may already have published this');
+      }
 
       const account = await first<Account>(
         ctx.env,
@@ -216,7 +228,31 @@ export const publisher: Agent = {
           { data: { externalId: result.externalId, permalink: result.permalink } },
         );
       } catch (err) {
-        const message = String(err).slice(0, 500);
+        const message = describeError(err).slice(0, 500);
+
+        // The platform may have published this and only the answer was lost —
+        // a 5xx, a timeout, a dropped connection. Retrying would post it a
+        // second time, and on nine social accounts a duplicate is what gets
+        // the account limited. So stop, and put it in front of a person.
+        if (err instanceof PlatformError && err.outcomeUnknown) {
+          await update(ctx.env, 'posts', postId, {
+            status: 'needs_reconcile',
+            last_error: message,
+          });
+          await ctx.settle(decisionId, 'failed', { error: message, outcome: 'unknown' });
+          await ctx.incident({
+            severity: 'error',
+            code: 'publish_outcome_unknown',
+            message:
+              `${account.channel} did not answer, so this post may or may not be live. ` +
+              'Check the account: cancel it if nothing posted, mark it published if it did.',
+            context: { post_id: postId, account_id: account.id, error: message },
+          });
+          return failed(`publish outcome unknown, held for review: ${message}`);
+        }
+
+        // Anything else was refused before it took effect, so it is safe to
+        // try again.
         const exhausted = post.attempts + 1 >= 3;
         await update(ctx.env, 'posts', postId, {
           status: exhausted ? 'failed' : 'scheduled',

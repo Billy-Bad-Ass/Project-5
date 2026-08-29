@@ -126,7 +126,10 @@ export interface Post {
     | 'publishing'
     | 'published'
     | 'failed'
-    | 'cancelled';
+    | 'cancelled'
+    /** The platform never answered, so this may or may not be live. A person
+     *  checks the account before it moves to published or cancelled. */
+    | 'needs_reconcile';
   attempts: number;
   last_error: string | null;
   idempotency_key: string;
