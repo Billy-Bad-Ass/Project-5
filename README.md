@@ -235,7 +235,7 @@ docs/            architecture, account setup, operations runbook
 
 ```bash
 npm run typecheck
-npm test          # 52 tests, no network
+npm test          # 144 tests, no network
 npm run dev
 npm run check     # both
 ```
@@ -256,3 +256,13 @@ Built with reference to these repositories, named in the original brief:
 The editorial gate is a direct port of humanizer's pattern list. The
 "everything stays a draft until the mutation gate passes" posture is borrowed
 from claude-ads.
+
+humanizer is MIT licensed and its pattern list originates with Wikipedia's
+"Signs of AI writing", which is CC BY-SA 4.0. This repository is public, so
+both are attributed properly in [`NOTICE.md`](NOTICE.md) rather than only
+mentioned here — including what was taken (the phrases to watch for) and what
+was not (any of the page's prose).
+
+## Licence
+
+MIT, © 2026 BBA Network. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
