@@ -10,6 +10,7 @@ import { describeRegistry } from '../orchestrator/registry';
 import { drainDelayed, runFullSweep, runTaskNow } from '../orchestrator/dispatch';
 import { spendByChannel, spendToday } from '../orchestrator/guardrails';
 import { channelPerformance, storedReport } from '../agents/analyst';
+import { resolutionFor } from './resolve-post';
 import { createCampaignRecord } from '../agents/mediabuyer';
 import { storeMedia } from '../agents/producer';
 import { blendedCac, blendedRoas } from '../orchestrator/allocator';
@@ -126,6 +127,15 @@ export async function route(request: Request, env: Env): Promise<Response> {
     }
 
     if (path === '/api/posts' && method === 'GET') return listPosts(env, url);
+
+    // A post held as needs_reconcile is waiting on the one thing no code here
+    // can determine: whether the platform actually published it. The publisher
+    // deliberately will not guess, so this is how the answer gets back in.
+    const resolvePost = path.match(/^\/api\/posts\/([\w-]+)\/resolve$/);
+    if (resolvePost && method === 'POST') {
+      const body = await safeJson(request);
+      return resolveHeldPost(env, resolvePost[1]!, body);
+    }
     if (path === '/api/decisions' && method === 'GET') return listDecisions(env, url);
     if (path === '/api/incidents' && method === 'GET') {
       return json({
@@ -509,6 +519,42 @@ async function listPosts(env: Env, url: URL): Promise<Response> {
       ...binds,
     ),
   });
+}
+
+/**
+ * Record what a person found when they checked the account.
+ *
+ * The decision itself is `resolutionFor`, kept pure and next to the rule it
+ * enforces, so the one endpoint that can mark a post published without any
+ * platform saying so is testable without a database.
+ */
+async function resolveHeldPost(
+  env: Env,
+  postId: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const post = await first<{ id: string; status: string }>(
+    env,
+    'SELECT id, status FROM posts WHERE id = ?',
+    postId,
+  );
+  if (!post) return json({ error: 'post not found' }, 404);
+
+  const decision = resolutionFor(post.status, body, nowIso());
+  if ('error' in decision) return json({ error: decision.error }, decision.status);
+
+  await update(env, 'posts', postId, decision.patch);
+
+  // The incident exists to make someone look. They looked.
+  await env.DB.prepare(
+    `UPDATE incidents SET resolved_at = ?
+      WHERE resolved_at IS NULL AND code = 'publish_outcome_unknown'
+        AND context LIKE ?`,
+  )
+    .bind(nowIso(), `%${postId}%`)
+    .run();
+
+  return json({ ok: true, status: decision.patch.status, warning: decision.warning });
 }
 
 async function listDecisions(env: Env, url: URL): Promise<Response> {

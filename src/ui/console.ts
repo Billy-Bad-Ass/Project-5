@@ -371,11 +371,39 @@ async function loadContent() {
     '<tr><th>Channel</th><th>Status</th><th>Scheduled</th><th>Link</th></tr>' +
     (posts.length
       ? posts.slice(0, 30).map((p) =>
-          '<tr><td>' + esc(p.channel) + '</td><td>' + esc(p.status) + '</td><td class="muted">' +
+          '<tr><td>' + esc(p.channel) + '</td><td>' +
+          (p.status === 'needs_reconcile'
+            ? '<span class="pill high">check the account</span>'
+            : esc(p.status)) +
+          '</td><td class="muted">' +
           esc((p.scheduled_for || '').slice(0, 16)) + '</td><td>' +
-          (p.permalink ? '<a href="' + esc(p.permalink) + '" target="_blank" rel="noopener">open</a>' : '-') +
+          (p.status === 'needs_reconcile'
+            // The platform never answered, so only a person looking at the
+            // account can say which of these it was.
+            ? '<button class="action" onclick="resolvePost(\'' + esc(p.id) +
+                '\',\'published\')">It posted</button> ' +
+              '<button class="action" onclick="resolvePost(\'' + esc(p.id) +
+                '\',\'cancelled\')">It did not</button>'
+            : p.permalink
+              ? '<a href="' + esc(p.permalink) + '" target="_blank" rel="noopener">open</a>'
+              : '-') +
           '</td></tr>').join('')
       : '<tr><td colspan="4" class="empty">Nothing scheduled.</td></tr>');
+}
+
+/** Answer a held post: did it actually go out or not? */
+async function resolvePost(postId, outcome) {
+  const permalink =
+    outcome === 'published'
+      ? prompt('Paste the link to the post, if you have it. Leave blank to skip.') || ''
+      : '';
+  const res = await api('/api/posts/' + postId + '/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ outcome, ...(permalink ? { permalink } : {}) }),
+  });
+  toast(res.warning || (outcome === 'published' ? 'Marked as posted' : 'Marked as not posted'));
+  await loadPosts();
+  await loadIncidents();
 }
 
 async function loadDecisions() {
