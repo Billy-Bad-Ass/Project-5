@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { apiFetch } from '../src/lib/http';
 import { PlatformError } from '../src/lib/errors';
@@ -112,5 +113,38 @@ describe('apiFetch still retries what is safe to retry', () => {
     }) as unknown as typeof fetch;
     await expect(post()).resolves.toEqual({ id: 'abc' });
     expect(calls.n).toBe(1);
+  });
+});
+
+/**
+ * The adapter contract carries no idempotency key, on purpose.
+ *
+ * It used to, and the publisher's claim to be idempotent rested on it while
+ * every adapter ignored it. Reintroducing a shared field that most adapters
+ * would ignore rebuilds exactly that false floor, so this guards against it.
+ *
+ * Adding one for a platform *confirmed* to support it is fine — do it in that
+ * adapter, against its own documentation, and set `idempotent: true` on the
+ * apiFetch call. This test only fails the shared-contract version.
+ */
+describe('the shared publish contract makes no idempotency promise', () => {
+  it('PublishInput declares no idempotency key', () => {
+    const types = readFileSync(new URL('../src/platforms/types.ts', import.meta.url), 'utf8');
+    const publishInput = types.slice(
+      types.indexOf('export interface PublishInput'),
+      types.indexOf('export interface PublishResult'),
+    );
+    expect(publishInput).not.toMatch(/^\s*idempotencyKey/m);
+  });
+
+  it('the publisher does not hand one to an adapter', () => {
+    const publisher = readFileSync(new URL('../src/agents/publisher.ts', import.meta.url), 'utf8');
+    expect(publisher).not.toMatch(/idempotencyKey:\s*post\./);
+  });
+
+  /** The database key is the one that does real work, and it stays. */
+  it('keeps the unique column that stops a creative being scheduled twice', () => {
+    const schema = readFileSync(new URL('../db/migrations/0001_init.sql', import.meta.url), 'utf8');
+    expect(schema).toMatch(/idempotency_key\s+TEXT NOT NULL UNIQUE/);
   });
 });
