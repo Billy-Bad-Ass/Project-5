@@ -18,14 +18,32 @@ export interface MediaRef {
   altText?: string;
 }
 
+/**
+ * One post, as an adapter needs it.
+ *
+ * This deliberately carries no idempotency key. It used to, described as
+ * "passed upstream where the platform supports it" — but no adapter has ever
+ * read it, and the publisher's claim to be idempotent rested on that field. A
+ * timed-out-but-successful post was retried anyway, which is how one scheduled
+ * post could reach an account nine times.
+ *
+ * The protection is now real and lives elsewhere: `apiFetch` refuses to repeat
+ * a write whose outcome is unknown, and the publisher holds such a post as
+ * `needs_reconcile` for a person to confirm. `posts.idempotency_key` still
+ * exists in the database, where it does genuine work — a UNIQUE column that
+ * stops the same creative being scheduled to the same account twice.
+ *
+ * If a platform is *confirmed* to accept an idempotency header, add it in that
+ * adapter against its own documentation, and set `idempotent: true` on the
+ * apiFetch call so the retry is allowed again. Do not reintroduce a shared
+ * field that most adapters would ignore.
+ */
 export interface PublishInput {
   body: string;
   hook?: string | null;
   cta?: string | null;
   hashtags?: string[];
   media: MediaRef[];
-  /** Passed upstream where the platform supports it, otherwise used locally. */
-  idempotencyKey: string;
   /** Reddit needs one, LinkedIn and Pinterest use it as the title field. */
   title?: string;
   /** Reddit subreddit, Pinterest board id. */

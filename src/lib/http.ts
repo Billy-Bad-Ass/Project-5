@@ -45,7 +45,8 @@ const DEFAULT_TIMEOUT_MS = 20_000;
  * default three attempts, so one timed-out-but-successful post could go out
  * three times before the publisher's own retry even started. The publisher
  * called itself idempotent on the strength of an `idempotencyKey` that no
- * adapter ever read.
+ * adapter ever read; that field has since been removed rather than left
+ * looking like protection.
  *
  * So writes now stop at the first unknown outcome and hand the caller a
  * `PlatformError` whose `outcomeUnknown` is true. Reconciling that — did it

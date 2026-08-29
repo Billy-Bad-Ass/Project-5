@@ -197,7 +197,6 @@ export const publisher: Agent = {
         cta: creativeRow.cta,
         hashtags: parseJson<string[]>(creativeRow.hashtags, []),
         media: await resolveMedia(ctx.env, creativeRow),
-        idempotencyKey: post.idempotency_key,
         ...(creativeRow.hook ? { title: creativeRow.hook } : {}),
       };
 
