@@ -26,9 +26,26 @@ export class PlatformError extends AppError {
   /**
    * 429 and 5xx are worth another attempt. 4xx means the request itself is
    * wrong and retrying only burns rate limit.
+   *
+   * Safe to consult only for a request that can be repeated. A write also has
+   * to clear `outcomeUnknown` — see below.
    */
   get retryable(): boolean {
     return this.status === 429 || this.status >= 500;
+  }
+
+  /**
+   * Did this failure leave us unable to say whether the request took effect?
+   *
+   * A 4xx was rejected before anything happened, and a 429 was refused by the
+   * rate limiter, so both mean "definitely not applied" — repeating them is
+   * safe. A 5xx, a timeout or an aborted connection mean the request may have
+   * been fully processed and only the answer was lost. Repeating one of those
+   * on a write is how a single scheduled post becomes three posts on the
+   * account, or one ad set becomes three spending in parallel.
+   */
+  get outcomeUnknown(): boolean {
+    return this.status >= 500;
   }
 }
 
