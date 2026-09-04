@@ -2,7 +2,7 @@ import { all, first, insert, parseJson, run } from '../lib/db';
 import { apiFetch } from '../lib/http';
 import { id } from '../lib/ids';
 import { nowIso } from '../lib/time';
-import { completeJson, MODELS } from '../integrations/anthropic';
+import { completeJson, hasModelAccess, MODELS } from '../integrations/anthropic';
 import { DEFAULT_VOICE, loadVoice, type VoiceProfile } from '../editorial/voice';
 import type { Offer } from '../types';
 import { type Agent, failed, num, ok, str, strList } from './agent';
@@ -37,6 +37,61 @@ const CLAIMS_SCHEMA = {
   required: ['claims', 'proof_points'],
 } as const;
 
+/**
+ * Whether there is any point calling a model at all.
+ *
+ * The claim list is the output of this task, and it does not have to come from
+ * a model. `Code/growth/CLAIMS.md` is generated from the catalog, which is a
+ * better source than a scraped landing page: it is the authoritative record of
+ * what has been built, it carries a proof line per entry, and it is checked in.
+ * Once that list is loaded, re-deriving it from a web page every day spends
+ * money to produce a worse answer.
+ *
+ * Pure, so it can be tested without a database or a network.
+ */
+export function researchDecision(input: {
+  claimsOnFile: number;
+  hasKey: boolean;
+  force?: boolean;
+}): { act: boolean; reason: string } {
+  if (input.force) return { act: true, reason: 'forced, re-deriving the claim list' };
+  if (input.claimsOnFile > 0) {
+    return {
+      act: false,
+      reason: `${input.claimsOnFile} claims already on file, nothing to research (pass force to re-derive)`,
+    };
+  }
+  if (!input.hasKey) {
+    return {
+      act: false,
+      reason:
+        'no claim list and no model configured. Load one with Code/scripts/build-claims.mjs',
+    };
+  }
+  return { act: true, reason: 'no claims on file' };
+}
+
+/**
+ * A model that cannot be paid for is a configuration state, not an incident.
+ *
+ * This deployment opened a fresh error incident every day over an unfunded
+ * account. Ten of them, all identical, none of them news after the first.
+ * Recognising the shape lets the task skip cleanly and record the fact once,
+ * instead of failing three attempts a day forever.
+ */
+export function isUnfundedOrUnauthorised(err: unknown): boolean {
+  const text = String(err).toLowerCase();
+  return (
+    text.includes('credit balance is too low') ||
+    text.includes('billing') ||
+    text.includes('quota') ||
+    text.includes('insufficient') ||
+    text.includes('invalid x-api-key') ||
+    text.includes('authentication_error') ||
+    text.includes('failed with 401')
+  );
+}
+
 export const scout: Agent = {
   id: 'scout',
   describe: 'Reads the offer page and turns it into the claim list writers may not exceed.',
@@ -47,7 +102,16 @@ export const scout: Agent = {
      * creative agent has facts rather than adjectives to work from.
      */
     async research_offer(ctx, payload) {
-      if (!ctx.env.ANTHROPIC_API_KEY) return failed('ANTHROPIC_API_KEY is not set');
+      const voice = await loadVoice(ctx.env);
+      const decision = researchDecision({
+        claimsOnFile: voice.provenClaims.length,
+        hasKey: hasModelAccess(ctx.env),
+        force: payload.force === true,
+      });
+      if (!decision.act) {
+        return ok(decision.reason, { data: { claims_on_file: voice.provenClaims.length } });
+      }
+
       const offerId = str(payload, 'offerId');
       const offer = offerId
         ? await first<Offer>(ctx.env, 'SELECT * FROM offers WHERE id = ?', offerId)
@@ -69,12 +133,15 @@ export const scout: Agent = {
         return ok('landing page had almost no readable text, nothing to extract');
       }
 
-      const extracted = await completeJson<{
+      type Extracted = {
         claims: string[];
         proof_points: string[];
         audience?: string;
         tone_notes?: string[];
-      }>(ctx.env, {
+      };
+      let extracted: Extracted;
+      try {
+        extracted = await completeJson<Extracted>(ctx.env, {
         model: MODELS.worker,
         maxTokens: 1500,
         system: [
@@ -83,10 +150,17 @@ export const scout: Agent = {
           'Marketing adjectives with no substance behind them are not claims. Leave them out.',
         ].join('\n'),
         prompt: `Page: ${offer.landing_url}\n\n${text.slice(0, 40_000)}`,
-        schema: CLAIMS_SCHEMA as unknown as Record<string, unknown>,
-      });
+          schema: CLAIMS_SCHEMA as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        if (!isUnfundedOrUnauthorised(err)) throw err;
+        await noteModelUnavailable(ctx, err);
+        return ok(
+          'the model is not reachable on this account, so no claims were derived. Load a list with Code/scripts/build-claims.mjs',
+          { data: { model_unavailable: true } },
+        );
+      }
 
-      const voice = await loadVoice(ctx.env);
       const merged: VoiceProfile = {
         ...voice,
         provenClaims: dedupe([
@@ -198,6 +272,34 @@ export const scout: Agent = {
     },
   },
 };
+
+/**
+ * Record that the model is unreachable, once, not once a day.
+ *
+ * Mirrors the guardian's `markNeedsReauth`: if an unresolved incident with this
+ * code already exists, say nothing further. One open incident is a fact worth
+ * seeing on the dashboard. Ten identical ones are noise that hides the next
+ * real problem.
+ */
+async function noteModelUnavailable(
+  ctx: Parameters<Agent['tasks'][string]>[0],
+  err: unknown,
+): Promise<void> {
+  const existing = await first<{ id: string }>(
+    ctx.env,
+    `SELECT id FROM incidents WHERE code = 'model_unavailable' AND resolved_at IS NULL LIMIT 1`,
+  );
+  if (existing) return;
+  await insert(ctx.env, 'incidents', {
+    id: id('inc'),
+    severity: 'warn',
+    source: 'agent:scout',
+    code: 'model_unavailable',
+    message: 'the Anthropic account cannot be charged, so the writing agents are offline',
+    context: JSON.stringify({ error: String(err).slice(0, 500) }),
+    created_at: nowIso(),
+  });
+}
 
 /** Fetch a page and reduce it to readable text. No parser, so keep it simple. */
 async function readableText(url: string): Promise<string> {
